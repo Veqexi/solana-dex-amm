@@ -1,4 +1,5 @@
 program/target
+client/target
 .idea*
 *.json
 *~

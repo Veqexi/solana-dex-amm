@@ -49,12 +49,14 @@ use std::{
     num::NonZeroU64, ops::Deref,
 };
 
+// H2W : custom SRM Token
 pub mod srm_token {
-    solana_program::declare_id!("SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt");
+    solana_program::declare_id!("81QRdjzELnvcKBz416R7sfqXGeVkE8jarTJYpVjgY4qX");
 }
 
+// H2W : custom MSRM Token
 pub mod msrm_token {
-    solana_program::declare_id!("MSRMcoVyrFxnSgo5uXwone5SKcGhT1KEJMFEkMEWf9L");
+    solana_program::declare_id!("Ehv1WQhSQXLgxXy599eNkCXL9LcgTXzPrpi41MbmH8ch");
 }
 
 #[cfg(feature = "localnet")]
@@ -75,7 +77,7 @@ pub mod config_feature {
 #[cfg(feature = "devnet")]
 pub mod config_feature {
     pub mod amm_owner {
-        solana_program::declare_id!("Adm29NctkKwJGaaiU8CXqdV6WDTwR81JbxV8zoxn745Y");
+        solana_program::declare_id!("B45t7VFMD9tNbDG8Unzr9z6LbknjwNegD9qDtd7jiLVy");
     }
     pub mod openbook_program {
         solana_program::declare_id!("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj");
@@ -84,7 +86,7 @@ pub mod config_feature {
         solana_program::declare_id!("4NpMfWThvJQsV9VLjUXXpn3tPv1zoQpib8wCBDc1EBzD");
     }
     pub mod create_pool_fee_address {
-        solana_program::declare_id!("3XMrhbv989VxAMi3DErLV9eJht1pHppW5LbKxe9fkEFR");
+        solana_program::declare_id!("96SwUAW5VMZBxddWXsSmnwEbtXS8BbVWDkpWdZ69ktf4");
     }
 }
 #[cfg(not(any(feature = "localnet", feature = "devnet")))]

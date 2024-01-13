@@ -13,6 +13,9 @@ pub mod processor;
 pub mod state;
 
 // Export current solana-sdk types for downstream users who may also be building with a different solana-sdk version
-pub use solana_program;
+use anchor_lang::prelude::*;
 
-// solana_program::declare_id!("");
+#[cfg(feature = "devnet")]
+declare_id!("ASbYTeihwZGDn5GPP6ePcyuGvf6ke8GaMp5hoMLc43MR");
+#[cfg(not(any(feature = "devnet", feature = "client")))]
+declare_id!("");
