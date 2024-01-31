@@ -1,10 +1,10 @@
 # Note: This crate must be built using do.sh
 
 [package]
-name = "raydium_amm"
+name = "makidex_amm"
 version = "0.3.0"
-description = "Raydium AMM"
-authors = ["Raydium Maintainers "]
+description = "MakiDEX AMM"
+authors = ["MakiDEX Maintainers "]
 repository = "https://github.com/raydium-io/raydium-amm"
 license = "Apache-2.0"
 edition = "2018"
@@ -41,7 +41,7 @@ anchor-lang = "0.29.0"
 bumpalo = { version = "3.4.0", features = ["collections"] }
 
 [lib]
-name = "raydium_amm"
+name = "makidex_amm"
 crate-type = ["cdylib", "lib"]
 
 [profile.release]
