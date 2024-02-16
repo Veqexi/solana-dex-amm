@@ -683,6 +683,8 @@ pub struct AmmInfo {
     pub padding1: [u64; 8],
     /// amm owner key
     pub amm_owner: Pubkey,
+    /// amm subscriber key
+    pub amm_subscriber: Pubkey,
     /// pool lp amount
     pub lp_amount: u64,
     /// client order id

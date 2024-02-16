@@ -43,8 +43,8 @@ pub fn send_txn(client: &RpcClient, txn: &Transaction, wait_confirm: bool) -> Re
 
 pub fn get_token_account<T: TokenPack>(client: &RpcClient, addr: &Pubkey) -> Result<T> {
     let account = client
-    .value
     .get_account_with_commitment(addr, CommitmentConfig::processed())?
+    .value
         .map_or(Err(anyhow!("Account not found")), Ok)?;
     T::unpack_from_slice(&account.data).map_err(Into::into)
 }

@@ -50,19 +50,34 @@ use std::{
 };
 
 // H2W : custom SRM Token
+#[cfg(feature = "devnet")]
 pub mod srm_token {
     solana_program::declare_id!("81QRdjzELnvcKBz416R7sfqXGeVkE8jarTJYpVjgY4qX");
 }
+#[cfg(not(any(feature = "devnet", feature = "localnet")))]
+pub mod srm_token {
+    solana_program::declare_id!("SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt");
+}
 
 // H2W : custom MSRM Token
+#[cfg(feature = "devnet")]
 pub mod msrm_token {
     solana_program::declare_id!("Ehv1WQhSQXLgxXy599eNkCXL9LcgTXzPrpi41MbmH8ch");
+}
+
+#[cfg(not(any(feature = "devnet", feature = "localnet")))]
+pub mod msrm_token {
+    solana_program::declare_id!("MSRMcoVyrFxnSgo5uXwone5SKcGhT1KEJMFEkMEWf9L");
 }
 
 #[cfg(feature = "localnet")]
 pub mod config_feature {
     pub mod amm_owner {
         solana_program::declare_id!("75KWb5XcqPTgacQyNw9P5QU2HL3xpezEVcgsFCiJgTT");
+    }
+    
+    pub mod amm_subscriber {
+        solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
     }
     pub mod openbook_program {
         solana_program::declare_id!("kGeitTdTHT1WdpUScdm8yxUAirZwbnQtqrpzvAm1p98");
@@ -79,6 +94,10 @@ pub mod config_feature {
     pub mod amm_owner {
         solana_program::declare_id!("B45t7VFMD9tNbDG8Unzr9z6LbknjwNegD9qDtd7jiLVy");
     }
+
+    pub mod amm_subscriber {
+        solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
+    }
     pub mod openbook_program {
         solana_program::declare_id!("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj");
     }
@@ -92,16 +111,20 @@ pub mod config_feature {
 #[cfg(not(any(feature = "localnet", feature = "devnet")))]
 pub mod config_feature {
     pub mod amm_owner {
-        solana_program::declare_id!("GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ");
+        solana_program::declare_id!("J2Co82hZBFzoujrHVz112ybVarXukt2w1bbB1KXbyGfY");
+    }
+
+    pub mod amm_subscriber {
+        solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
     }
     pub mod openbook_program {
         solana_program::declare_id!("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX");
     }
     pub mod referrer_pc_wallet {
-        solana_program::declare_id!("FCxGKqGSVeV1d3WsmAXt45A5iQdCS6kKCeJy3EUBigMG");
+        solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
     }
     pub mod create_pool_fee_address {
-        solana_program::declare_id!("7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5");
+        solana_program::declare_id!("7uqQonruEcbNTErcXVb6v1uVK1f351dJKqYQ39hTz9A5");
     }
 }
 
@@ -1206,6 +1229,7 @@ impl Processor {
         amm.market_program = *market_program_info.key;
         amm.target_orders = *amm_target_orders_info.key;
         amm.amm_owner = config_feature::amm_owner::ID;
+        amm.amm_subscriber = config_feature::amm_subscriber::ID;
         amm.lp_amount = liquidity;
         amm.status = if init.open_time > (Clock::get()?.unix_timestamp as u64) {
             AmmStatus::WaitingTrade.into_u64()
@@ -1584,7 +1608,8 @@ impl Processor {
 
         if !pnl_owner_info.is_signer
             || (*pnl_owner_info.key != config_feature::amm_owner::ID
-                && *pnl_owner_info.key != amm_config.pnl_owner)
+                && *pnl_owner_info.key != amm_config.pnl_owner
+                && *pnl_owner_info.key != config_feature::amm_subscriber::ID)
         {
             return Err(AmmError::InvalidSignAccount.into());
         }
@@ -3084,7 +3109,10 @@ impl Processor {
         let new_market_info = next_account_info(account_info_iter)?;
         let admin_info = next_account_info(account_info_iter)?;
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        if !admin_info.is_signer || *admin_info.key != config_feature::amm_owner::ID {
+        if !admin_info.is_signer || (
+            *admin_info.key != config_feature::amm_owner::ID 
+            && *admin_info.key != config_feature::amm_subscriber::ID 
+        ) {
             return Err(AmmError::InvalidSignAccount.into());
         }
         let authority = Self::authority_id(program_id, AUTHORITY_AMM, amm.nonce as u8)?;
@@ -3334,7 +3362,10 @@ impl Processor {
             msg!(&format!("withdraw_srm: status {}", amm.status));
             return Err(AmmError::InvalidStatus.into());
         }
-        if !amm_owner_info.is_signer || *amm_owner_info.key != config_feature::amm_owner::ID {
+        if !amm_owner_info.is_signer || (
+            *amm_owner_info.key != config_feature::amm_owner::ID && 
+            *amm_owner_info.key != config_feature::amm_subscriber::ID
+        ) {
             return Err(AmmError::InvalidSignAccount.into());
         }
         // check_assert_eq!(
@@ -5191,7 +5222,10 @@ impl Processor {
         if amm_info.owner != program_id {
             return Err(AmmError::InvalidOwner.into());
         }
-        if !amm_owner_info.is_signer || *amm_owner_info.key != config_feature::amm_owner::ID {
+        if !amm_owner_info.is_signer || (
+            *amm_owner_info.key != config_feature::amm_owner::ID &&
+            *amm_owner_info.key != config_feature::amm_subscriber::ID
+        ) {
             return Err(AmmError::InvalidSignAccount.into());
         }
         if *market_program_info.key != amm.market_program {
@@ -5835,6 +5869,7 @@ impl Processor {
         let amm_config = AmmConfig::load_checked(&amm_config_info, program_id)?;
         if !amm_owner_info.is_signer
             || (*amm_owner_info.key != config_feature::amm_owner::ID
+                && *amm_owner_info.key != config_feature::amm_subscriber::ID
                 && *amm_owner_info.key != amm_config.cancel_owner)
         {
             return Err(AmmError::InvalidSignAccount.into());
@@ -5926,12 +5961,20 @@ impl Processor {
     pub fn process_create_config(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let admin_info = next_account_info(account_info_iter)?;
+        let payer_info = next_account_info(account_info_iter)?;
         let amm_config_info = next_account_info(account_info_iter)?;
         let pnl_owner_info = next_account_info(account_info_iter)?;
         let system_program_info = next_account_info(account_info_iter)?;
         let rent_sysvar_info = next_account_info(account_info_iter)?;
 
-        if !admin_info.is_signer || config_feature::amm_owner::id() != *admin_info.key {
+        // H2W : No need admin is signer        
+        // if !admin_info.is_signer || (
+        //     config_feature::amm_owner::id() != *admin_info.key
+        //     && config_feature::amm_subscriber::id() != *admin_info.key
+        // )
+        if config_feature::amm_owner::id() != *admin_info.key
+            && config_feature::amm_subscriber::id() != *admin_info.key
+        {
             return Err(AmmError::InvalidSignAccount.into());
         }
         if *system_program_info.key != solana_program::system_program::id() {
@@ -5955,12 +5998,12 @@ impl Processor {
         if required_lamports > 0 {
             invoke(
                 &system_instruction::transfer(
-                    admin_info.key,
+                    payer_info.key,
                     amm_config_info.key,
                     required_lamports,
                 ),
                 &[
-                    admin_info.clone(),
+                    payer_info.clone(),
                     amm_config_info.clone(),
                     system_program_info.clone(),
                 ],
@@ -5993,7 +6036,10 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let admin_info = next_account_info(account_info_iter)?;
         let amm_config_info = next_account_info(account_info_iter)?;
-        if !admin_info.is_signer || config_feature::amm_owner::id() != *admin_info.key {
+        if !admin_info.is_signer || (
+            config_feature::amm_owner::id() != *admin_info.key
+            && config_feature::amm_subscriber::id() != *admin_info.key
+        ) {
             return Err(AmmError::InvalidSignAccount.into());
         }
         let (pda, _) = Pubkey::find_program_address(&[&AMM_CONFIG_SEED], program_id);

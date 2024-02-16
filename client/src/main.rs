@@ -42,7 +42,7 @@ use spl_token_2022::{
     state::{Account, AccountState},
 };
 use spl_token_client::token::ExtensionInitializationParams;
-use raydium_amm::instruction::*;
+use makidex_amm::instruction::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClientConfig {
@@ -50,6 +50,7 @@ pub struct ClientConfig {
     ws_url: String,
     payer_path: String,
     admin_path: String,
+    admin_key: Pubkey,
     raydium_program: Pubkey,
     pnl_owner: Pubkey,
 }
@@ -86,11 +87,17 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     }
     let pnl_owner = Pubkey::from_str(&pnl_owner_str).unwrap();
 
+    let admin_key_str = config.get("Global", "admin_key").unwrap();
+    if admin_key_str.is_empty() {
+        panic!("admin_key must not be empty");
+    }
+    let admin_key = Pubkey::from_str(&admin_key_str).unwrap();
     Ok(ClientConfig {
         http_url,
         ws_url,
         payer_path,
         admin_path,
+        admin_key,
         raydium_program,
         pnl_owner
     })
@@ -132,6 +139,7 @@ fn main() -> Result<()> {
     let admin = read_keypair_file(&pool_config.admin_path)?;
     let raydium_amm = pool_config.raydium_program;
     let pnl_owner = pool_config.pnl_owner;
+    let admin_key = pool_config.admin_key;
 
     // solana rpc client
     let rpc_client = RpcClient::new(pool_config.http_url.to_string());
@@ -154,19 +162,21 @@ fn main() -> Result<()> {
             let program = anchor_client.program(pool_config.raydium_program)?;
             let (amm_config_key, __bump) = Pubkey::find_program_address(
                 &[
-                    &raydium_amm::processor::AMM_CONFIG_SEED
+                    &makidex_amm::processor::AMM_CONFIG_SEED
                 ],
                 &program.id(),
             );
         
             let create_instr = create_config_account(
                 &raydium_amm,
-                &admin.pubkey(),
+                &admin_key, // &admin.pubkey(),
+                &payer.pubkey(),
                 &amm_config_key,
                 &pnl_owner,
             )?;
             // send
-            let signers = vec![&payer, &admin];
+            // let signers = vec![&payer, &admin];
+            let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
                 &vec![create_instr],

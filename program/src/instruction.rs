@@ -1673,12 +1673,14 @@ pub fn admin_cancel_orders(
 pub fn create_config_account(
     amm_program: &Pubkey,
     admin: &Pubkey,
+    payer: &Pubkey,
     amm_config: &Pubkey,
     pnl_owner: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
     let data = AmmInstruction::CreateConfigAccount.pack()?;
     let accounts = vec![
-        AccountMeta::new(*admin, true),
+        AccountMeta::new(*admin, false),
+        AccountMeta::new(*payer, true),
         AccountMeta::new(*amm_config, false),
         AccountMeta::new_readonly(*pnl_owner, false),
         AccountMeta::new_readonly(solana_program::system_program::id(), false),
