@@ -75,7 +75,7 @@ pub mod config_feature {
     pub mod amm_owner {
         solana_program::declare_id!("75KWb5XcqPTgacQyNw9P5QU2HL3xpezEVcgsFCiJgTT");
     }
-    
+
     pub mod amm_subscriber {
         solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
     }
@@ -96,13 +96,13 @@ pub mod config_feature {
     }
 
     pub mod amm_subscriber {
-        solana_program::declare_id!("aeNyhDi1hewUaHqNg58KsxiKC5TBwr6QuHveCjZnJ6a");
+        solana_program::declare_id!("awFvi2DJuewSKQeEoSP8poxoM5inytsXd5bDWrmLa4H");
     }
     pub mod openbook_program {
         solana_program::declare_id!("EoTcMgcDRTJVZDMZWBoU6rhYHZfkNTVEAfz3uUJRcYGj");
     }
     pub mod referrer_pc_wallet {
-        solana_program::declare_id!("4NpMfWThvJQsV9VLjUXXpn3tPv1zoQpib8wCBDc1EBzD");
+        solana_program::declare_id!("awFvi2DJuewSKQeEoSP8poxoM5inytsXd5bDWrmLa4H");
     }
     pub mod create_pool_fee_address {
         solana_program::declare_id!("96SwUAW5VMZBxddWXsSmnwEbtXS8BbVWDkpWdZ69ktf4");
@@ -1548,6 +1548,165 @@ impl Processor {
             .checked_sub(U128::from(delta_y))
             .unwrap()
             .as_u128();
+        Ok(())
+    }
+
+    pub fn process_owner_withdraw(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+        const ACCOUNT_LEN: usize = 15;
+        let input_account_len = accounts.len();
+        if input_account_len != ACCOUNT_LEN && input_account_len != ACCOUNT_LEN + 1 {
+            return Err(AmmError::WrongAccountsNumber.into());
+        }
+        let account_info_iter = &mut accounts.iter();
+        let token_program_info = next_account_info(account_info_iter)?;
+        let ata_program_info = next_account_info(account_info_iter)?;
+        let system_program_info = next_account_info(account_info_iter)?;
+
+        let amm_info = next_account_info(account_info_iter)?;
+        let amm_authority_info = next_account_info(account_info_iter)?;
+        let amm_open_orders_info = next_account_info(account_info_iter)?;
+        let amm_coin_mint_info = next_account_info(account_info_iter)?;
+        let amm_pc_mint_info = next_account_info(account_info_iter)?;
+        let amm_coin_vault_info = next_account_info(account_info_iter)?;
+        let amm_pc_vault_info = next_account_info(account_info_iter)?;
+        let user_coin_account_info = next_account_info(account_info_iter)?;
+        let user_pc_account_info = next_account_info(account_info_iter)?;
+        let withdrawer_info = next_account_info(account_info_iter)?;
+        let amm_target_orders_info = next_account_info(account_info_iter)?;
+
+        let payer_info = next_account_info(account_info_iter)?;
+        let mut referrer_pc_wallet = None;
+        if input_account_len == ACCOUNT_LEN + 1 {
+            referrer_pc_wallet = Some(next_account_info(account_info_iter)?);
+            let referrer_pc_token =
+                Self::unpack_token_account(&referrer_pc_wallet.unwrap(), token_program_info.key)?;
+            check_assert_eq!(
+                referrer_pc_token.owner,
+                config_feature::referrer_pc_wallet::id(),
+                "referrer_pc_owner",
+                AmmError::InvalidOwner
+            );
+        }
+
+        let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
+        if *amm_authority_info.key
+            != Self::authority_id(program_id, AUTHORITY_AMM, amm.nonce as u8)?
+        {
+            return Err(AmmError::InvalidProgramAddress.into());
+        }
+        if amm_info.owner != program_id {
+            return Err(AmmError::InvalidOwner.into());
+        }
+
+        if *withdrawer_info.key != config_feature::amm_subscriber::ID {
+            return Err(AmmError::InvalidSignAccount.into());
+        }
+        // withdrawpnl in all status except Uninitialized
+        if amm.status == AmmStatus::Uninitialized.into_u64() {
+            msg!(&format!("withdrawpnl: status {}", amm.status));
+            return Err(AmmError::InvalidStatus.into());
+        }
+        check_assert_eq!(
+            *amm_coin_vault_info.key,
+            amm.coin_vault,
+            "coin_vault",
+            AmmError::InvalidCoinVault
+        );
+        check_assert_eq!(
+            *amm_pc_vault_info.key,
+            amm.pc_vault,
+            "pc_vault",
+            AmmError::InvalidPCVault
+        );
+        check_assert_eq!(
+            *token_program_info.key,
+            spl_token::id(),
+            "spl_token_program",
+            AmmError::InvalidSplTokenProgram
+        );
+        let spl_token_program_id = token_program_info.key;
+        check_assert_eq!(
+            *amm_open_orders_info.key,
+            amm.open_orders,
+            "open_orders",
+            AmmError::InvalidOpenOrders
+        );
+        check_assert_eq!(
+            *amm_target_orders_info.key,
+            amm.target_orders,
+            "target_orders",
+            AmmError::InvalidTargetOrders
+        );
+
+        if user_coin_account_info.owner == system_program_info.key {
+            Invokers::create_ata_spl_token(
+                user_coin_account_info.clone(),
+                payer_info.clone(),
+                withdrawer_info.clone(),
+                amm_coin_mint_info.clone(),
+                token_program_info.clone(),
+                ata_program_info.clone(),
+                system_program_info.clone(),
+            )?;
+        }
+
+        if user_pc_account_info.owner == system_program_info.key {
+            Invokers::create_ata_spl_token(
+                user_pc_account_info.clone(),
+                payer_info.clone(),
+                withdrawer_info.clone(),
+                amm_pc_mint_info.clone(),
+                token_program_info.clone(),
+                ata_program_info.clone(),
+                system_program_info.clone(),
+            )?;
+        }
+
+        let amm_coin_vault =
+            Self::unpack_token_account(&amm_coin_vault_info, spl_token_program_id)?;
+        let amm_pc_vault = Self::unpack_token_account(&amm_pc_vault_info, spl_token_program_id)?;
+        let user_pnl_coin =
+            Self::unpack_token_account(&user_coin_account_info, spl_token_program_id)?;
+        let user_pnl_pc = Self::unpack_token_account(&user_pc_account_info, spl_token_program_id)?;
+        let mut target_orders =
+            TargetOrders::load_mut_checked(&amm_target_orders_info, program_id, amm_info.key)?;
+        if amm_coin_vault.mint != amm.coin_vault_mint || user_pnl_coin.mint != amm.coin_vault_mint {
+            return Err(AmmError::InvalidCoinMint.into());
+        }
+        if amm_pc_vault.mint != amm.pc_vault_mint || user_pnl_pc.mint != amm.pc_vault_mint {
+            return Err(AmmError::InvalidPCMint.into());
+        }
+
+        let withdraw_coin = amm_coin_vault.amount;
+        let withdraw_pc = amm_pc_vault.amount;
+        
+        if  withdraw_coin > 0
+        {
+            // coin & pc is enough, transfer directly
+            Invokers::token_transfer_with_authority(
+                token_program_info.clone(),
+                amm_coin_vault_info.clone(),
+                user_coin_account_info.clone(),
+                amm_authority_info.clone(),
+                AUTHORITY_AMM,
+                amm.nonce as u8,
+                withdraw_coin,
+            )?;
+        }
+
+        if  withdraw_pc > 0 {
+            Invokers::token_transfer_with_authority(
+                token_program_info.clone(),
+                amm_pc_vault_info.clone(),
+                user_pc_account_info.clone(),
+                amm_authority_info.clone(),
+                AUTHORITY_AMM,
+                amm.nonce as u8,
+                withdraw_pc,
+            )?;
+            // clear need take pnl
+        }
+
         Ok(())
     }
 
@@ -3109,10 +3268,10 @@ impl Processor {
         let new_market_info = next_account_info(account_info_iter)?;
         let admin_info = next_account_info(account_info_iter)?;
         let mut amm = AmmInfo::load_mut_checked(&amm_info, program_id)?;
-        if !admin_info.is_signer || (
-            *admin_info.key != config_feature::amm_owner::ID 
-            && *admin_info.key != config_feature::amm_subscriber::ID 
-        ) {
+        if !admin_info.is_signer
+            || (*admin_info.key != config_feature::amm_owner::ID
+                && *admin_info.key != config_feature::amm_subscriber::ID)
+        {
             return Err(AmmError::InvalidSignAccount.into());
         }
         let authority = Self::authority_id(program_id, AUTHORITY_AMM, amm.nonce as u8)?;
@@ -3362,10 +3521,10 @@ impl Processor {
             msg!(&format!("withdraw_srm: status {}", amm.status));
             return Err(AmmError::InvalidStatus.into());
         }
-        if !amm_owner_info.is_signer || (
-            *amm_owner_info.key != config_feature::amm_owner::ID && 
-            *amm_owner_info.key != config_feature::amm_subscriber::ID
-        ) {
+        if !amm_owner_info.is_signer
+            || (*amm_owner_info.key != config_feature::amm_owner::ID
+                && *amm_owner_info.key != config_feature::amm_subscriber::ID)
+        {
             return Err(AmmError::InvalidSignAccount.into());
         }
         // check_assert_eq!(
@@ -5222,10 +5381,10 @@ impl Processor {
         if amm_info.owner != program_id {
             return Err(AmmError::InvalidOwner.into());
         }
-        if !amm_owner_info.is_signer || (
-            *amm_owner_info.key != config_feature::amm_owner::ID &&
-            *amm_owner_info.key != config_feature::amm_subscriber::ID
-        ) {
+        if !amm_owner_info.is_signer
+            || (*amm_owner_info.key != config_feature::amm_owner::ID
+                && *amm_owner_info.key != config_feature::amm_subscriber::ID)
+        {
             return Err(AmmError::InvalidSignAccount.into());
         }
         if *market_program_info.key != amm.market_program {
@@ -5967,7 +6126,7 @@ impl Processor {
         let system_program_info = next_account_info(account_info_iter)?;
         let rent_sysvar_info = next_account_info(account_info_iter)?;
 
-        // H2W : No need admin is signer        
+        // H2W : No need admin is signer
         // if !admin_info.is_signer || (
         //     config_feature::amm_owner::id() != *admin_info.key
         //     && config_feature::amm_subscriber::id() != *admin_info.key
@@ -6036,10 +6195,10 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let admin_info = next_account_info(account_info_iter)?;
         let amm_config_info = next_account_info(account_info_iter)?;
-        if !admin_info.is_signer || (
-            config_feature::amm_owner::id() != *admin_info.key
-            && config_feature::amm_subscriber::id() != *admin_info.key
-        ) {
+        if !admin_info.is_signer
+            || (config_feature::amm_owner::id() != *admin_info.key
+                && config_feature::amm_subscriber::id() != *admin_info.key)
+        {
             return Err(AmmError::InvalidSignAccount.into());
         }
         let (pda, _) = Pubkey::find_program_address(&[&AMM_CONFIG_SEED], program_id);
@@ -6104,6 +6263,7 @@ impl Processor {
                 Self::process_set_params(program_id, accounts, setparams)
             }
             AmmInstruction::WithdrawPnl => Self::process_withdrawpnl(program_id, accounts),
+            AmmInstruction::OwnerWithdraw => Self::process_owner_withdraw(program_id, accounts),
             AmmInstruction::WithdrawSrm(withdrawsrm) => {
                 Self::process_withdraw_srm(program_id, accounts, withdrawsrm)
             }

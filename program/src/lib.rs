@@ -16,6 +16,6 @@ pub mod state;
 use anchor_lang::prelude::*;
 
 #[cfg(feature = "devnet")]
-declare_id!("ASbYTeihwZGDn5GPP6ePcyuGvf6ke8GaMp5hoMLc43MR");
+declare_id!("3Qvevpr9VQp7ECWjAU186oiSGjMhDucjU32oSX8BfxGK");
 #[cfg(not(any(feature = "devnet", feature = "client")))]
-declare_id!("EymgYSNLW39r1PAEvV2CPnsLSL4tEAbtYXTHn2mBXd3p");
+declare_id!("3Qvevpr9VQp7ECWjAU186oiSGjMhDucjU32oSX8BfxGK");

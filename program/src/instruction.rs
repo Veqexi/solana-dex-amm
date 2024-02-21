@@ -366,6 +366,8 @@ pub enum AmmInstruction {
 
     /// Update amm config account by admin
     UpdateConfigAccount(ConfigArgs),
+    /// Owner Withdraw
+    OwnerWithdraw,
 }
 
 impl AmmInstruction {
@@ -574,7 +576,8 @@ impl AmmInstruction {
                         return Err(ProgramError::InvalidInstructionData.into());
                     }
                 }
-            }
+            },
+            16=> Self::OwnerWithdraw,
             _ => return Err(ProgramError::InvalidInstructionData.into()),
         })
     }
@@ -714,6 +717,9 @@ impl AmmInstruction {
             }
             Self::WithdrawPnl => {
                 buf.push(7);
+            }            
+            Self::OwnerWithdraw => {
+                buf.push(16);
             }
             Self::WithdrawSrm(WithdrawSrmInstruction { amount }) => {
                 buf.push(8);
@@ -1226,6 +1232,51 @@ pub fn withdrawpnl(
         AccountMeta::new(*market_coin_vault, false),
         AccountMeta::new(*market_pc_vault, false),
         AccountMeta::new_readonly(*market_vault_signer, false),
+    ];
+
+    Ok(Instruction {
+        program_id: *amm_program,
+        accounts,
+        data,
+    })
+}
+
+/// Creates a 'ownerwithdraw' instruction
+pub fn ownerwithdraw(
+    amm_program: &Pubkey,
+    amm_pool: &Pubkey,
+    amm_authority: &Pubkey,
+    amm_open_orders: &Pubkey,
+    amm_coin_mint: &Pubkey,
+    amm_pc_mint: &Pubkey,
+    amm_coin_vault: &Pubkey,
+    amm_pc_vault: &Pubkey,
+    user_token_coin: &Pubkey,
+    user_token_pc: &Pubkey,
+    user_owner: &Pubkey,
+    amm_target_orders: &Pubkey,
+    payer: &Pubkey
+) -> Result<Instruction, ProgramError> {
+    let data = AmmInstruction::OwnerWithdraw.pack()?;
+    
+    let accounts = vec![
+        // spl token
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(spl_associated_token_account::id(), false),
+        AccountMeta::new_readonly(solana_program::system_program::id(), false),
+        // amm
+        AccountMeta::new(*amm_pool, false),
+        AccountMeta::new_readonly(*amm_authority, false),
+        AccountMeta::new(*amm_open_orders, false),
+        AccountMeta::new(*amm_coin_mint, false),
+        AccountMeta::new(*amm_pc_mint, false),
+        AccountMeta::new(*amm_coin_vault, false),
+        AccountMeta::new(*amm_pc_vault, false),
+        AccountMeta::new(*user_token_coin, false),
+        AccountMeta::new(*user_token_pc, false),
+        AccountMeta::new_readonly(*user_owner, false),
+        AccountMeta::new(*amm_target_orders, false),
+        AccountMeta::new(*payer, true),
     ];
 
     Ok(Instruction {
