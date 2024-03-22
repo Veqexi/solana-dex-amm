@@ -8,6 +8,7 @@ use solana_client::{
 use solana_sdk::{
     account::Account, commitment_config::CommitmentConfig, program_pack::Pack as TokenPack,
     pubkey::Pubkey, signature::Signature, transaction::Transaction,
+    commitment_config::CommitmentLevel,
 };
 use std::convert::Into;
 
@@ -36,6 +37,8 @@ pub fn send_txn(client: &RpcClient, txn: &Transaction, wait_confirm: bool) -> Re
         },
         RpcSendTransactionConfig {
             skip_preflight: true,
+            max_retries: Some(5),
+            preflight_commitment: Some(CommitmentLevel::Processed),
             ..RpcSendTransactionConfig::default()
         },
     )?)

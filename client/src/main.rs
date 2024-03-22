@@ -15,9 +15,11 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcTransactionConfig},
     rpc_filter::{Memcmp, RpcFilterType},
     rpc_request::TokenAccountsFilter,
+    rpc_response::{RpcResult, RpcSimulateTransactionResult, Response},
 };
 use solana_sdk::{
     commitment_config::CommitmentConfig,
+    commitment_config::CommitmentLevel::Confirmed,
     compute_budget::ComputeBudgetInstruction,
     message::Message,
     program_pack::Pack,
@@ -326,8 +328,20 @@ fn main() -> Result<()> {
                 &signers,
                 recent_hash,
             );
-            let signature = send_txn(&rpc_client, &txn, true)?;
-            println!("{}", signature);
+            let result : Response<RpcSimulateTransactionResult> = simulate_transaction(&rpc_client, &txn, false, CommitmentConfig{
+                commitment: Confirmed
+            })?;
+            let logs = result.value.logs.unwrap();
+            println!("Simulate :");
+            for log in logs {
+                println!("   log :  {}", log);
+            }
+            if let Some(error) = result.value.err {
+                println!("Transaction simulation failed: {:?}", error);
+            } else {
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
         }
     }
 
